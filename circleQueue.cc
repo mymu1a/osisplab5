@@ -13,7 +13,6 @@ void circleQueueInit(CircleHead* pHead, short sizeQueue)
 	pHead->indexTail = -1;
 	pHead->size = sizeQueue;
 	pHead->isEmpty = true;
-	pHead->indexMessage = 0;
 
 	initMutex(pHead);
 

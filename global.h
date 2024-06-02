@@ -3,6 +3,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <semaphore.h>
 #include <unistd.h>
 
 #include <sys/queue.h>
@@ -33,6 +34,7 @@ struct Message
 };
 
 struct CircleHead;
+
 struct Child
 {
 	unsigned	index;					// child index
@@ -41,6 +43,7 @@ struct Child
 	bool		inProcess;				// Porducer ( or Consumer ) works with Message
 	pthread_t	idThread;
 	CircleHead* pCircleHead;
+	sem_t*		pSemaphore;
 
 	TAILQ_ENTRY(Child) allChildren;         /* Tail queue. */
 };

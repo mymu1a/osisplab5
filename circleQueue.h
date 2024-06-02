@@ -8,12 +8,9 @@ struct CircleHead
 	short indexHead;
 	short indexTail;
 	short size;
-	struct CircleElement* pBuf;
 
 	bool isEmpty;					// no info in the buffer
 	pthread_mutex_t mutex;			// mutual exclusive access to the Queue
-
-	unsigned	indexMessage;		// latest message index
 
 	short countWrite;				// счетчик добавленных сообщений
 	short countRead;				// счетчик извлеченных сообщений
@@ -21,7 +18,7 @@ struct CircleHead
 
 struct CircleElement
 {
-	unsigned	indexMessage;		// message index ( is used as File Name )
+	struct Message* pMessage;
 };
 
 void circleQueueInit(CircleHead* pHead, short sizeQueue);

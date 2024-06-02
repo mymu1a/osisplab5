@@ -13,34 +13,27 @@
 #include <fcntl.h>           /* For O_* constants */
 
 
-void readMessage(unsigned indexMessage, struct Message* pMessage);
-static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pChild);
+void deleteMessage(struct Message*);
+static void startNanoSleep(char* nameProgram, Child* pChild);
 
 
 void* threadConsumer(void* pData)
 {
 	Child* pChild = (Child*)pData;
 
-	/*
-	sem_t*		pSemaphore;
-
-	pSemaphore = openSemaphore(SEM_PRODUSER_NAME);
-	if (pSemaphore == NULL)
-	{
-		printf("Error: cannot open sem\n");
-		return 1;
-	}
-	//*/
-	startNanoSleep(pChild->nameProgram, pChild->pCircleHead, pChild);
+	startNanoSleep(pChild->nameProgram, pChild);
 
 	return NULL;
 }
 
-static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pChild)
+static void startNanoSleep(char* nameProgram, Child* pChild)
 {
 	struct timespec		time, time2;
 	int					count = 5;
 	int					result;
+
+	CircleHead* pCircleHead = pChild->pCircleHead;
+	sem_t* pSemaphore = pChild->pSemaphore;
 
 	time.tv_sec = 1;
 	time.tv_nsec = 0.5 * 1000000000;
@@ -52,23 +45,28 @@ static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pC
 		{
 			CircleElement* pElement;
 
-//			sem_wait(pSemaphore);
+			sem_wait(pSemaphore);
 			pChild->inProcess = true;  // prevent terminating by Exit Signal
 
 			pthread_mutex_lock(&pCircleHead->mutex);									// mutex lock
 
+
 			if (circleQueueNextRead(pCircleHead, &pElement) == false)
 			{
 				printf("  circleQueue is empty -- xxxx --\t");
+
 			}
 			else
 			{
-				struct Message pMessage;
+				struct Message* pMessage;
 
-				readMessage(pElement->indexMessage, &pMessage);
+				pMessage = pElement->pMessage;
+				printf("pMessage->type = %d\t", pMessage->type);
+				printf("pMessage->size = %d\t", pMessage->size);
+				deleteMessage(pMessage);
+
 				pCircleHead->countRead++;												// increment `счетчик извлеченных сообщений`
 				printf("  %d ( count read )\t", pCircleHead->countRead);
-
 			}
 			printf(" ( %s )\n", nameProgram);
 
@@ -76,7 +74,7 @@ static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pC
 			pChild->inProcess = false;  // prevent terminating by Exit Signal
 			pthread_mutex_unlock(&pCircleHead->mutex);									// mutex unlock
 
-//			sem_post(pSemaphore);
+			sem_post(pSemaphore);
 			if (pChild->isExit == true)
 			{
 				printf("isExit == true !!!!!!!!!!!!!\n");
@@ -98,29 +96,8 @@ static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pC
 	}
 }
 
-void readMessage(unsigned indexMessage, struct Message* pMessage)
+void deleteMessage(struct Message* pMessage)
 {
-	int fd;
-	char pathMessage[8 + 6] = { 0, };
-
-	sprintf(pathMessage, "%s/%05d", MESSAGE_FOLDER, indexMessage);
-
-	fd = open(pathMessage, O_RDWR, 0666);
-	if (fd < 0)
-	{
-		printf("Error: cannot open Message file:\n");
-		return;
-	}
-
-	read(fd, (void*)&pMessage->type, 1);
-	read(fd, (void*)&pMessage->hash, 2);
-	read(fd, (void*)&pMessage->size, 1);
-
-	printf("pMessage->type = %d\t", pMessage->type);
-	printf("pMessage->size = %d\t", pMessage->size);
-
-	pMessage->pData = (u_char*)malloc(pMessage->size);
-	read(fd, (void*)pMessage->pData, pMessage->size);
-
-	close(fd);
+	free(pMessage->pData);
+	free(pMessage);
 }

@@ -12,37 +12,28 @@
 #include <sys/stat.h>        /* For mode constants */
 #include <fcntl.h>           /* For O_* constants */
 
+
 struct Message* createMessage();
-void deleteMessage(struct Message*);
-static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pChild);
+static void startNanoSleep(char* nameProgram, Child* pChild);
 
 
 void* threadProducer(void* pData)
 {
 	Child* pChild = (Child*)pData;
 
-	/*
-	sem_t*		pSemaphore;
-
-	pSemaphore = openSemaphore(SEM_PRODUSER_NAME);
-	if (pSemaphore == NULL)
-	{
-		printf("Error: cannot open sem\n");
-		return 1;
-	}
-	//*/
-	startNanoSleep(pChild->nameProgram, pChild->pCircleHead, pChild);
+	startNanoSleep(pChild->nameProgram, pChild);
 
 	return NULL;
 }
 
-static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pChild)
+static void startNanoSleep(char* nameProgram, Child* pChild)
 {
 	struct timespec		time, time2;
 	int					count = 5;
 	int					result;
 
-//	sem_t* pSemaphore;
+	CircleHead* pCircleHead = pChild->pCircleHead;
+	sem_t* pSemaphore = pChild->pSemaphore;
 
 	time.tv_sec = 1;
 	time.tv_nsec = 0.5 * 1000000000;
@@ -54,7 +45,7 @@ static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pC
 		{
 			CircleElement* pElement;
 
-//			sem_wait(pSemaphore);
+			sem_wait(pSemaphore);
 			pChild->inProcess = true;  // prevent terminating by Exit Signal
 
 			pthread_mutex_lock(&pCircleHead->mutex);									// mutex lock
@@ -69,25 +60,21 @@ static void startNanoSleep(char* nameProgram, CircleHead* pCircleHead, Child* pC
 			{
 				struct Message* pMessage;
 
-				pCircleHead->indexMessage++;									// name File
-
 				pMessage = createMessage();
-///				writeMessage(pCircleHead->indexMessage, pMessage);
-				deleteMessage(pMessage);
-				
+				pElement->pMessage = pMessage;
+
 				pCircleHead->countWrite++;												// increment `счетчик добавленных сообщений`
 				printf("  %d ( count write )\t", pCircleHead->countWrite);
-
-				pElement->indexMessage = pCircleHead->indexMessage;
 				
 ///				circleQueueLogState(pCircleHead);
 			}
 			printf(" ( %s )\n", nameProgram);
 
+
 			pChild->inProcess = false;  // prevent terminating by Exit Signal
 			pthread_mutex_unlock(&pCircleHead->mutex);									// mutex unlock
 			
-//			sem_post(pSemaphore);
+			sem_post(pSemaphore);
 			if (pChild->isExit == true)
 			{
 				printf("isExit == true !!!!!!!!!!!!!\n");
@@ -144,10 +131,4 @@ struct Message* createMessage()
 	pMessage->type = 1;
 
 	return pMessage;
-}
-
-void deleteMessage(struct Message* pMessage)
-{
-	free(pMessage->pData);
-	free(pMessage);
 }

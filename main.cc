@@ -24,13 +24,15 @@ TAILQ_HEAD(HeadOfCollection, Child)
 	colProducer = TAILQ_HEAD_INITIALIZER(colProducer),
 	colConsumer = TAILQ_HEAD_INITIALIZER(colConsumer);
 
+sem_t semaphoreProducer;
+sem_t semaphoreConsumer;
 
 //===== Functions =====
 int createChild(unsigned indexChild, char* dirChild, TYPE_CHILD childType);
 CircleHead* createColMessage();
-void onExit();
-sem_t* openSemaphore(const char* nameSemaphore, unsigned value);
-void stopChildAll(TYPE_CHILD type);
+void stopChildren();
+// stop children threads and optionaly free Children in collection
+void stopChildren(TYPE_CHILD type, bool freeMemory);
 void* threadConsumer(void* pData);
 void* threadProducer(void* pData);
 
@@ -40,21 +42,17 @@ int main(int argc, char* argv[], char* envp[])
 {
 	printf("main ST\n");
 
-	char dirChild[] = "./";						/////
+	int result;
 
-
-	sem_t* pSemaphoreProducer;
-
-	pSemaphoreProducer = openSemaphore(SEM_PRODUSER_NAME, SEM_PRODUSER_VALUE);
-	if (pSemaphoreProducer == NULL)
+	result = sem_init(&semaphoreProducer, 0, SEM_PRODUSER_VALUE);
+	if (result != 0)
 	{
 		printf("Error: cannot open Semaphore\n");
 		return 1;
 	}
-	sem_t* pSemaphoreConsumer;
 
-	pSemaphoreConsumer = openSemaphore(SEM_CONSUMER_NAME, SEM_CONSUMER_VALUE);
-	if (pSemaphoreConsumer == NULL)
+	result = sem_init(&semaphoreConsumer, 0, SEM_CONSUMER_VALUE);
+	if (result != 0)
 	{
 		printf("Error: cannot open Semaphore\n");
 		return 1;
@@ -66,13 +64,14 @@ int main(int argc, char* argv[], char* envp[])
 	unsigned	indexProduser = 0;
 	unsigned	indexConsumer = 0;
 	CircleHead* pCircleHead;
+	bool		isQuit = false;
 
 	TAILQ_INIT(&colProducer);                   /* Initialize the queue. */
 	TAILQ_INIT(&colConsumer);                   /* Initialize the queue. */
 
 	pCircleHead = createColMessage();			// initialize circled collection for Messages
 
-	while ((ch = getchar()) != EOF)
+	while ((ch = getchar()) != EOF && isQuit == false)
 	{
 		//=== select command ===
 		switch (ch)
@@ -87,10 +86,11 @@ int main(int argc, char* argv[], char* envp[])
 			pChild->pCircleHead = pCircleHead;
 			pChild->isExit = false;
 			pChild->inProcess = false;
+			pChild->pSemaphore = &semaphoreProducer;
 			sprintf(pChild->nameProgram, "%s_%02d", CHILD_PRODUSER_PROGRAM, indexProduser);
 
 			pthread_create(&pChild->idThread, NULL, &threadProducer, (void*)pChild);
-
+			pthread_detach(pChild->idThread);			// will use detached threads
 
 			TAILQ_INSERT_TAIL(&colProducer, pChild, allChildren);
 
@@ -109,10 +109,11 @@ int main(int argc, char* argv[], char* envp[])
 			pChild->pCircleHead = pCircleHead;
 			pChild->isExit = false;
 			pChild->inProcess = false;
+			pChild->pSemaphore = &semaphoreConsumer;
 			sprintf(pChild->nameProgram, "%s_%02d", CHILD_CONSUMER_PROGRAM, indexConsumer);
 
 			pthread_create(&pChild->idThread, NULL, &threadConsumer, (void*)pChild);
-
+			pthread_detach(pChild->idThread);			// will use detached threads
 
 			TAILQ_INSERT_TAIL(&colConsumer, pChild, allChildren);
 
@@ -123,52 +124,39 @@ int main(int argc, char* argv[], char* envp[])
 		}
 		case 'k':								// terminate all Child processes
 		{
-			onExit();							// clear resources
+			stopChildren();						// clear resources
 			TAILQ_INIT(&colProducer);           /* Initialize the queue. */
 			TAILQ_INIT(&colConsumer);           /* Initialize the queue. */
 			break;
 		}
 		case 'q':
 		{
-			onExit();							// clear resources
-
 			printf("main OK quit\n");
-			return 0;
-		}
-		case 'z':						// kill zombie processes
-		{
-			int stat;
-
-			while (waitpid(-1, &stat, WUNTRACED) > 0)
-			{
-			}
+			isQuit = true;
 			break;
 		}
+
 		}
 	}
-	printf("main OK main");
-	onExit();							// clear resources
-	
-	// wait for children termination
-	while (wait(NULL) > 0)
-	{
-	}
+	printf("main OK main\n");
+	stopChildren();								// clear resources
+	pthread_exit(NULL);							// exit main thread
 
 	return 0;
 }
 // clear resources
-void onExit()
+void stopChildren()
 {
-	stopChildAll(TC_PRODUCER);			// terminate all Child processes
-	stopChildAll(TC_CONSUMER);			// terminate all Child processes
+	stopChildren(TC_PRODUCER, false /* freeMemory */);			// terminate all Child processes
+	stopChildren(TC_CONSUMER, false /* freeMemory */);			// terminate all Child processes
 }
 
-void stopChild(pid_t pidChild)
+void stopChild(Child* pChild)
 {
-	kill(pidChild, SIGUSR1);
+	pChild->isExit = true;
 }
 
-void stopChildAll(TYPE_CHILD type)
+void stopChildren(TYPE_CHILD type, bool freeMemory)
 {
 	struct HeadOfCollection* pColl = NULL;
 	const char* message;
@@ -192,9 +180,12 @@ void stopChildAll(TYPE_CHILD type)
 		pChildNext = pChild->allChildren.tqe_next;
 
 		printf(message, pChild->index);
-///		stopChild(pChild->pid);						// send signal to Child
-		free(pChild);
+		stopChild(pChild);						// send signal to Child
 
+		if (freeMemory == true)
+		{
+			free(pChild);
+		}
 		pChild = pChildNext;
 	}
 }
@@ -213,15 +204,4 @@ CircleHead* createColMessage()
 	circleQueueInit(pHead, SIZE_MESSAGE_QUEUE);
 
 	return pHead;
-}
-
-sem_t* openSemaphore(const char* nameSemaphore, unsigned value)
-{
-	sem_t* pSemaphore;
-	pSemaphore = sem_open(nameSemaphore, O_CREAT, 0660, value);
-	if (pSemaphore == SEM_FAILED)
-	{
-		return NULL;
-	}
-	return pSemaphore;
 }
