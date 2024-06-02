@@ -12,17 +12,12 @@
 
 #define CHILD_PRODUSER_PROGRAM "produser"
 #define CHILD_CONSUMER_PROGRAM "consumer"
-#define CHILD_DIR "CHILD_PATH"
+#define CHILD_DOCTOR_PROGRAM   "doctor"
 
-#define NAME_FILE_CIRCLE_QUEUE "circleQueue"
-#define MESSAGE_FOLDER "messages"
-
-#define SEM_PRODUSER_NAME "lab4_sem_producer"
 #define SEM_PRODUSER_VALUE 1
-#define SEM_CONSUMER_NAME "lab4_sem_consumer"
 #define SEM_CONSUMER_VALUE 2
 
-enum TYPE_CHILD { TC_PRODUCER, TC_CONSUMER };
+enum TYPE_CHILD { TC_PRODUCER, TC_CONSUMER, TC_DOCTOR };
 
 
 struct Message
@@ -44,6 +39,7 @@ struct Child
 	pthread_t	idThread;
 	CircleHead* pCircleHead;
 	sem_t*		pSemaphore;
+	bool		doctorInc;
 
 	TAILQ_ENTRY(Child) allChildren;         /* Tail queue. */
 };

@@ -22,7 +22,8 @@
 //=== Global Variables ===
 TAILQ_HEAD(HeadOfCollection, Child)
 	colProducer = TAILQ_HEAD_INITIALIZER(colProducer),
-	colConsumer = TAILQ_HEAD_INITIALIZER(colConsumer);
+	colConsumer = TAILQ_HEAD_INITIALIZER(colConsumer),
+	colDoctor   = TAILQ_HEAD_INITIALIZER(colDoctor);
 
 sem_t semaphoreProducer;
 sem_t semaphoreConsumer;
@@ -34,6 +35,7 @@ void stopChildren();
 // stop children threads and optionaly free Children in collection
 void stopChildren(TYPE_CHILD type, bool freeMemory);
 void* threadConsumer(void* pData);
+void* threadDoctor(void* pData);
 void* threadProducer(void* pData);
 
 
@@ -63,11 +65,13 @@ int main(int argc, char* argv[], char* envp[])
 	int ch;
 	unsigned	indexProduser = 0;
 	unsigned	indexConsumer = 0;
+	unsigned	indexDoctor	  = 0;
 	CircleHead* pCircleHead;
 	bool		isQuit = false;
 
 	TAILQ_INIT(&colProducer);                   /* Initialize the queue. */
 	TAILQ_INIT(&colConsumer);                   /* Initialize the queue. */
+	TAILQ_INIT(&colDoctor);                     /* Initialize the queue. */
 
 	pCircleHead = createColMessage();			// initialize circled collection for Messages
 
@@ -122,11 +126,56 @@ int main(int argc, char* argv[], char* envp[])
 
 			break;
 		}
+		case 'd':
+		{
+			struct Child* pChild;
+
+			pChild = (Child*)malloc(sizeof(struct Child));
+
+			pChild->index = indexDoctor;
+			pChild->doctorInc = false;
+			pChild->pCircleHead = pCircleHead;
+			pChild->isExit = false;
+			sprintf(pChild->nameProgram, "%s_%02d", CHILD_DOCTOR_PROGRAM, indexDoctor);
+
+			pthread_create(&pChild->idThread, NULL, &threadDoctor, (void*)pChild);
+			pthread_detach(pChild->idThread);			// will use detached threads
+
+			TAILQ_INSERT_TAIL(&colDoctor, pChild, allChildren);
+
+			printf("Start Doctor: %d\n", indexDoctor);
+			indexDoctor++;
+
+			break;
+		}
+		case 'i':
+		{
+			struct Child* pChild;
+
+			pChild = (Child*)malloc(sizeof(struct Child));
+
+			pChild->index = indexDoctor;
+			pChild->doctorInc = true;
+			pChild->pCircleHead = pCircleHead;
+			pChild->isExit = false;
+			sprintf(pChild->nameProgram, "%s_%02d", CHILD_DOCTOR_PROGRAM, indexDoctor);
+
+			pthread_create(&pChild->idThread, NULL, &threadDoctor, (void*)pChild);
+			pthread_detach(pChild->idThread);			// will use detached threads
+
+			TAILQ_INSERT_TAIL(&colDoctor, pChild, allChildren);
+
+			printf("Start Doctor: %d\n", indexDoctor);
+			indexDoctor++;
+
+			break;
+		}
 		case 'k':								// terminate all Child processes
 		{
 			stopChildren();						// clear resources
 			TAILQ_INIT(&colProducer);           /* Initialize the queue. */
 			TAILQ_INIT(&colConsumer);           /* Initialize the queue. */
+			TAILQ_INIT(&colDoctor);             /* Initialize the queue. */
 			break;
 		}
 		case 'q':
@@ -149,6 +198,7 @@ void stopChildren()
 {
 	stopChildren(TC_PRODUCER, false /* freeMemory */);			// terminate all Child processes
 	stopChildren(TC_CONSUMER, false /* freeMemory */);			// terminate all Child processes
+	stopChildren(TC_DOCTOR, false /* freeMemory */);			// terminate all Child processes
 }
 
 void stopChild(Child* pChild)
@@ -166,12 +216,16 @@ void stopChildren(TYPE_CHILD type, bool freeMemory)
 		pColl = &colProducer;
 		message = "Terminate Producer: %d\n";
 	}
-	else
+	else if (type == TC_CONSUMER)
 	{
 		pColl = &colConsumer;
 		message = "Terminate Consumer: %d\n";
 	}
-
+	else
+	{
+		pColl = &colDoctor;
+		message = "Terminate Doctor: %d\n";
+	}
 	// delete from the collection
 	for (struct Child* pChild = pColl->tqh_first; pChild != NULL; )
 	{
@@ -193,12 +247,12 @@ void stopChildren(TYPE_CHILD type, bool freeMemory)
 // initialize circled collection for Messages
 CircleHead* createColMessage()
 {
-	size_t		sizeColl;
+	size_t		sizeHead;
 	void*		pHeapMemory;
 	CircleHead* pHead;
 
-	sizeColl = sizeof(CircleHead) + sizeof(CircleElement) * SIZE_MESSAGE_QUEUE;
-	pHeapMemory = malloc(sizeColl);
+	sizeHead = sizeof(CircleHead);
+	pHeapMemory = malloc(sizeHead);
 	pHead = (CircleHead*)pHeapMemory;
 
 	circleQueueInit(pHead, SIZE_MESSAGE_QUEUE);

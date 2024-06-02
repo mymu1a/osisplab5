@@ -9,6 +9,8 @@ struct CircleHead
 	short indexTail;
 	short size;
 
+	void* pBuffer;					// queue first element
+
 	bool isEmpty;					// no info in the buffer
 	pthread_mutex_t mutex;			// mutual exclusive access to the Queue
 
@@ -26,3 +28,6 @@ bool circleQueueNextRead(CircleHead* pHead, CircleElement** pElement);
 bool circleQueueNextWrite(CircleHead* pHead, CircleElement** pElement);
 
 void circleQueueLogState(CircleHead* pHead);
+bool circleQueueSizeDec(CircleHead* pHead);
+void circleQueueSizeInc(CircleHead* pHead);
+
